@@ -398,15 +398,6 @@ const columns: ColumnDef<Transaction>[] = [
     },
   },
   {
-    accessorKey: "valueFiat",
-    header: "Value",
-    cell: ({ row }) => (
-      <span className="font-mono text-sm">
-        {fmtFiat(row.original.valueFiat)}
-      </span>
-    ),
-  },
-  {
     id: "explorer",
     header: "",
     cell: ({ row }) =>
