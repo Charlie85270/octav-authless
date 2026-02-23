@@ -29,9 +29,9 @@ export function StepApiKey({ onNext }: { onNext: () => void }) {
       <CardHeader>
         <CardTitle>Octav API Key</CardTitle>
         <CardDescription>
-          Enter your API key from{" "}
-          <a href="https://octav.fi" target="_blank" rel="noreferrer" className="underline">
-            octav.fi
+          Get your API key on{" "}
+          <a href="https://data.octav.fi/" target="_blank" rel="noreferrer" className="underline">
+            data.octav.fi
           </a>
         </CardDescription>
       </CardHeader>
