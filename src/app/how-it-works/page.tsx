@@ -86,7 +86,7 @@ export default function HowItWorksPage() {
         <div>
           <h1 className="text-2xl font-bold">How it works</h1>
           <p className="mt-1 text-muted-foreground">
-            Everything you need to know about Octav Taxes
+            Everything you need to know about Octav Authless
           </p>
         </div>
 
@@ -95,12 +95,12 @@ export default function HowItWorksPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Zap className="h-5 w-5" />
-              What is Octav Taxes?
+              What is Octav Authless?
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm text-muted-foreground">
             <p>
-              Octav Taxes is a client-side crypto tax export tool powered by the{" "}
+              Octav Authless is a client-side crypto portfolio tracker and tax export tool powered by the{" "}
               <a href="https://octav.fi" target="_blank" rel="noreferrer" className="text-foreground underline">
                 Octav API
               </a>
@@ -149,7 +149,7 @@ export default function HowItWorksPage() {
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground space-y-2">
             <p>
-              Octav Taxes runs <strong className="text-foreground">entirely in your browser</strong>. There is no backend server.
+              Octav Authless runs <strong className="text-foreground">entirely in your browser</strong>. There is no backend server.
             </p>
             <ul className="list-disc list-inside space-y-1">
               <li>API keys are stored in localStorage, never sent to any third-party server</li>

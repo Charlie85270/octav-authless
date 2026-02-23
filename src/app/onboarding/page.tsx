@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import { StepApiKey } from "@/components/onboarding/step-api-key";
 import { StepWallets } from "@/components/onboarding/step-wallets";
 import { StepAIKey } from "@/components/onboarding/step-ai-key";
-import { Receipt } from "lucide-react";
-
 export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const router = useRouter();
@@ -17,8 +15,8 @@ export default function OnboardingPage() {
     <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="w-full max-w-md space-y-8 p-6">
         <div className="flex flex-col items-center gap-2">
-          <Receipt className="h-10 w-10 text-primary" />
-          <h1 className="text-2xl font-bold">Octav Taxes</h1>
+          <img src="/logo.png" alt="Octav" className="h-10 w-10" />
+          <h1 className="text-2xl font-bold">Octav Authless</h1>
           <p className="text-sm text-muted-foreground">
             Step {step + 1} of {steps.length}: {steps[step]}
           </p>

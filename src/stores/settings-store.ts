@@ -82,7 +82,7 @@ export const useSettingsStore = create<SettingsState>()(
         }),
     }),
     {
-      name: "octav-taxes-settings",
+      name: "octav-authless-settings",
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         // Auto-select first address if none is active
