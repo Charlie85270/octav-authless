@@ -5,7 +5,12 @@ import { useRouter } from "next/navigation";
 import { StepApiKey } from "@/components/onboarding/step-api-key";
 import { StepWallets } from "@/components/onboarding/step-wallets";
 import { StepAIKey } from "@/components/onboarding/step-ai-key";
-import { Shield } from "lucide-react";
+import { Shield, HelpCircle } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export default function OnboardingPage() {
   const [step, setStep] = useState(0);
@@ -53,6 +58,30 @@ export default function OnboardingPage() {
             onSkip={() => router.replace("/dashboard")}
           />
         )}
+
+        <div className="flex justify-center pt-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                <HelpCircle className="h-3.5 w-3.5" />
+                What&apos;s Octav Authless?
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 text-sm" side="top">
+              <div className="space-y-2">
+                <p className="font-medium">Octav Authless</p>
+                <p className="text-muted-foreground text-xs">
+                  A fully client-side crypto portfolio tracker and tax export tool powered by the{" "}
+                  <a href="https://octav.fi" target="_blank" rel="noreferrer" className="underline text-foreground">Octav API</a>.
+                  Track holdings across 20+ blockchains, view DeFi positions, and export transactions to 10 tax platforms (Koinly, CoinTracker, CoinLedger, and more).
+                </p>
+                <p className="text-muted-foreground text-xs">
+                  No backend, no database, no account needed — just your Octav API key and wallet addresses. Everything runs in your browser.
+                </p>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
     </div>
   );
