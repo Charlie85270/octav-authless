@@ -30,14 +30,14 @@ export const metadata: Metadata = {
       "Client-side crypto portfolio tracker and tax export tool. Track holdings across 20+ chains, export to 10 tax platforms.",
     siteName: "Octav Authless",
     type: "website",
-    images: ["/logo.png"],
+    images: ["/banner.jpeg"],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: "Octav Authless",
     description:
       "Client-side crypto portfolio tracker and tax export tool powered by the Octav API.",
-    images: ["/logo.png"],
+    images: ["/banner.jpeg"],
   },
 };
 
