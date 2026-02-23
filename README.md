@@ -7,6 +7,22 @@ A fully client-side crypto portfolio tracker and tax export tool powered by the 
 ![Tailwind](https://img.shields.io/badge/Tailwind-4-38bdf8?logo=tailwindcss)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
+## Why Octav Authless?
+
+Octav Authless exists to show what you can build on top of the [Octav API](https://data.octav.fi/) — and to give API users a ready-made tool they can use right away.
+
+**For crypto users:**
+- You need to export your transactions for tax season? Octav Authless connects to the API, pulls your full transaction history, and exports it as a CSV compatible with Koinly, CoinTracker, CoinLedger, and 7 other tax platforms. No middleman, no account to create — just your API key.
+- You want a clear view of your portfolio across chains and DeFi protocols? The dashboard shows everything in one place: wallet holdings, Aave positions, Pendle yields, Hyperliquid margins, and more.
+
+**For developers:**
+- This is a reference implementation of what a full app looks like on top of the Octav API. Fork it, extend it, build your own tools. The entire codebase is open source and the API client is clean and typed.
+
+**For the Octav ecosystem:**
+- Every feature in this app runs on [Octav API credits](https://data.octav.fi/). Portfolio views, transaction syncs, CSV exports — they all consume credits. The more people use tools like this, the more credits get used. Octav Authless is a free, open-source frontend that drives real API usage.
+
+Get your API key and credits at **[data.octav.fi](https://data.octav.fi/)**.
+
 ## Features
 
 - **Portfolio Dashboard** — View holdings across 20+ blockchains with DeFi protocol positions (Aave, Spark, Pendle, Hyperliquid, etc.)
