@@ -253,10 +253,6 @@ function TransactionDetailDialog({
           {/* Value & Fees */}
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
-              <p className="text-xs text-muted-foreground">Total Value</p>
-              <p className="font-mono font-medium">{fmtFiat(tx.valueFiat)}</p>
-            </div>
-            <div>
               <p className="text-xs text-muted-foreground">Fees</p>
               <p className="font-mono font-medium">
                 {parseFloat(tx.fees) > 0 ? (
