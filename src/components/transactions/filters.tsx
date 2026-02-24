@@ -26,6 +26,7 @@ interface FiltersProps {
   type: string;
   startDate: string;
   endDate: string;
+  disabled?: boolean;
   onChainChange: (v: string) => void;
   onTypeChange: (v: string) => void;
   onStartDateChange: (v: string) => void;
@@ -37,6 +38,7 @@ export function Filters({
   type,
   startDate,
   endDate,
+  disabled,
   onChainChange,
   onTypeChange,
   onStartDateChange,
@@ -46,7 +48,7 @@ export function Filters({
     <div className="flex flex-wrap items-end gap-4">
       <div className="space-y-1">
         <Label className="text-xs">Chain</Label>
-        <Select value={chain} onValueChange={onChainChange}>
+        <Select value={chain} onValueChange={onChainChange} disabled={disabled}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="All chains" />
           </SelectTrigger>
@@ -63,7 +65,7 @@ export function Filters({
 
       <div className="space-y-1">
         <Label className="text-xs">Type</Label>
-        <Select value={type} onValueChange={onTypeChange}>
+        <Select value={type} onValueChange={onTypeChange} disabled={disabled}>
           <SelectTrigger className="w-[140px]">
             <SelectValue placeholder="All types" />
           </SelectTrigger>
@@ -85,6 +87,7 @@ export function Filters({
           value={startDate}
           onChange={(e) => onStartDateChange(e.target.value)}
           className="w-[160px]"
+          disabled={disabled}
         />
       </div>
 
@@ -95,6 +98,7 @@ export function Filters({
           value={endDate}
           onChange={(e) => onEndDateChange(e.target.value)}
           className="w-[160px]"
+          disabled={disabled}
         />
       </div>
     </div>

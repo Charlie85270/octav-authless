@@ -3,7 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSettingsStore } from "@/stores/settings-store";
 import * as api from "@/lib/octav-client";
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useTransactionsStore } from "@/stores/transactions-store";
 
 function useApiKey() {
@@ -105,21 +105,13 @@ export function useTransactions(options: {
   return { ...query, fetch, activated };
 }
 
-export function useAllTransactions(filters: {
-  chain?: string;
-  type?: string;
-  startDate?: string;
-  endDate?: string;
-} = {}) {
+export function useAllTransactions() {
   const apiKey = useApiKey();
   const addresses = useAddresses();
   const activeAddress = useSettingsStore((s) => s.activeAddress);
   const setTxCount = useSettingsStore((s) => s.setTxCount);
   const setGlobalTransactions = useTransactionsStore((s) => s.setTransactions);
   const queryClient = useQueryClient();
-
-  const filtersRef = useRef(filters);
-  filtersRef.current = filters;
 
   const [transactions, setTransactions] = useState<import("@/types/octav").Transaction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -140,7 +132,6 @@ export function useAllTransactions(filters: {
     try {
       while (true) {
         const result = await api.getTransactions(apiKey, addresses, {
-          ...filtersRef.current,
           offset,
           limit,
         });

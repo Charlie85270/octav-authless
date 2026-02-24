@@ -39,28 +39,42 @@ export default function TransactionsPage() {
   const activeAddress = useSettingsStore((s) => s.activeAddress);
   const knownTxCount = useSettingsStore((s) => s.txCountByAddress[s.activeAddress]);
 
-  const filters = {
-    chain: chain === "all" ? undefined : chain,
-    type: type === "all" ? undefined : type,
-    startDate: startDate || undefined,
-    endDate: endDate || undefined,
-  };
-
-  const { transactions, loading, progress, activated, fetchAll } =
-    useAllTransactions(filters);
+  const { transactions: allTransactions, loading, progress, activated, fetchAll } =
+    useAllTransactions();
 
   const { data: statusData } = useStatus();
   const txLastSync = statusData?.[0]?.transactionsLastSync;
   const neverSynced = !txLastSync;
 
+  // Client-side filtering
+  const filteredTransactions = useMemo(() => {
+    let result = allTransactions;
+    if (chain !== "all") {
+      result = result.filter((tx) => tx.chain.key === chain);
+    }
+    if (type !== "all") {
+      result = result.filter((tx) => tx.type === type);
+    }
+    if (startDate) {
+      result = result.filter((tx) => tx.timestamp >= startDate);
+    }
+    if (endDate) {
+      // Include the full end date day
+      result = result.filter((tx) => tx.timestamp <= endDate + "T23:59:59");
+    }
+    return result;
+  }, [allTransactions, chain, type, startDate, endDate]);
+
   // Client-side pagination
   const pageTransactions = useMemo(() => {
     const start = page * PAGE_SIZE;
-    return transactions.slice(start, start + PAGE_SIZE);
-  }, [transactions, page]);
+    return filteredTransactions.slice(start, start + PAGE_SIZE);
+  }, [filteredTransactions, page]);
 
-  const totalPages = Math.ceil(transactions.length / PAGE_SIZE);
+  const totalPages = Math.ceil(filteredTransactions.length / PAGE_SIZE);
   const hasMore = page < totalPages - 1;
+
+  const filtersDisabled = !activated || loading || allTransactions.length === 0;
 
   // Estimated cost
   const estimatedPages = knownTxCount ? Math.ceil(knownTxCount / 250) : undefined;
@@ -90,7 +104,12 @@ export default function TransactionsPage() {
             <h1 className="text-2xl font-bold">Transactions</h1>
             <SyncingBanner />
           </div>
-          <ExportDialog filters={filters} disabled={!activated || neverSynced} />
+          <ExportDialog filters={{
+            chain: chain === "all" ? undefined : chain,
+            type: type === "all" ? undefined : type,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
+          }} disabled={!activated || neverSynced} />
         </div>
 
         {/* Credit cost info banner */}
@@ -120,6 +139,7 @@ export default function TransactionsPage() {
           type={type}
           startDate={startDate}
           endDate={endDate}
+          disabled={filtersDisabled}
           onChainChange={(v) => { setChain(v); setPage(0); }}
           onTypeChange={(v) => { setType(v); setPage(0); }}
           onStartDateChange={(v) => { setStartDate(v); setPage(0); }}
@@ -181,14 +201,16 @@ export default function TransactionsPage() {
           <>
             <div className="flex items-center justify-between">
               <p className="text-sm text-muted-foreground">
-                {transactions.length.toLocaleString()} total transactions
+                {filteredTransactions.length === allTransactions.length
+                  ? `${allTransactions.length.toLocaleString()} total transactions`
+                  : `${filteredTransactions.length.toLocaleString()} of ${allTransactions.length.toLocaleString()} transactions`}
               </p>
             </div>
             <TransactionTable data={pageTransactions} />
           </>
         )}
 
-        {activated && !loading && transactions.length > 0 && (
+        {activated && !loading && filteredTransactions.length > 0 && (
           <Pagination
             offset={page * PAGE_SIZE}
             limit={PAGE_SIZE}
