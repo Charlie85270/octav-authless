@@ -47,7 +47,7 @@ export class RateLimitError extends OctavAPIError {
   }
 }
 
-const BASE_URL = "https://api.octav.fi/v1";
+const BASE_URL = "/api/octav";
 
 async function request<T>(
   endpoint: string,
