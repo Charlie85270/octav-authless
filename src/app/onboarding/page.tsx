@@ -32,7 +32,7 @@ export default function OnboardingPage() {
         <div className="flex items-start gap-2.5 rounded-lg border border-border/50 bg-muted/30 px-3.5 py-3 text-xs text-muted-foreground">
           <Shield className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
           <p>
-            <strong className="text-foreground">100% client-side.</strong> Your API keys and wallet addresses are stored in your browser&apos;s localStorage only. Nothing is ever sent to a server — all calls go directly to the Octav API from your browser.
+            <strong className="text-foreground">100% client-side.</strong> Your API keys and wallet addresses are stored in your browser&apos;s localStorage only. Nothing is ever stored to a server.
           </p>
         </div>
 
@@ -40,9 +40,8 @@ export default function OnboardingPage() {
           {steps.map((_, i) => (
             <div
               key={i}
-              className={`h-1 flex-1 rounded-full ${
-                i <= step ? "bg-primary" : "bg-muted"
-              }`}
+              className={`h-1 flex-1 rounded-full ${i <= step ? "bg-primary" : "bg-muted"
+                }`}
             />
           ))}
         </div>

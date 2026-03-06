@@ -5,7 +5,13 @@ import { Sidebar } from "./sidebar";
 import { Header } from "./header";
 import { ChatPanel } from "@/components/chat/chat-panel";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  variant = "default",
+}: {
+  children: React.ReactNode;
+  variant?: "default" | "full";
+}) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
@@ -13,7 +19,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar mobileOpen={mobileMenuOpen} onMobileClose={() => setMobileMenuOpen(false)} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <Header onMenuToggle={() => setMobileMenuOpen(true)} />
-        <main className="flex-1 overflow-y-auto p-3 sm:p-6">{children}</main>
+        <main
+          className={
+            variant === "full"
+              ? "flex-1 overflow-hidden flex flex-col"
+              : "flex-1 overflow-y-auto p-3 sm:p-6"
+          }
+        >
+          {children}
+        </main>
       </div>
       <ChatPanel />
     </div>
