@@ -13,6 +13,7 @@ import { getNativeToken } from "@/lib/csv-export/chain-native-token";
 export interface TokenBalance {
   key: string; // `${symbol}:${chainKey}`
   symbol: string;
+  name: string;
   chainKey: string;
   contract: string; // token contract ("" for native gas tokens) — used for pricing
   imgUrl: string | null;
@@ -30,6 +31,7 @@ interface Delta {
   ts: number; // ms
   key: string;
   symbol: string;
+  name: string;
   chainKey: string;
   contract: string;
   imgUrl: string | null;
@@ -86,6 +88,7 @@ export function buildDeltas(
           ts,
           key: tokenKey(symbol, chainKey),
           symbol,
+          name: asset.name || symbol,
           chainKey,
           contract: asset.contract || "",
           imgUrl: asset.imgSmall || null,
@@ -105,6 +108,7 @@ export function buildDeltas(
           ts,
           key: tokenKey(symbol, chainKey),
           symbol,
+          name: asset.name || symbol,
           chainKey,
           contract: asset.contract || "",
           imgUrl: asset.imgSmall || null,
@@ -125,6 +129,7 @@ export function buildDeltas(
           ts,
           key: tokenKey(nativeSymbol, txChainKey),
           symbol: nativeSymbol,
+          name: nativeSymbol,
           chainKey: txChainKey,
           contract: "", // native gas token
           imgUrl: null,
@@ -162,6 +167,7 @@ export function reconstructAt(
       balances.set(d.key, {
         key: d.key,
         symbol: d.symbol,
+        name: d.name,
         chainKey: d.chainKey,
         contract: d.contract,
         imgUrl: d.imgUrl,
