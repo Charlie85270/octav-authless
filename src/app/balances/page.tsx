@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Wallet } from "lucide-react";
+import { Wallet, ChevronDown, ChevronUp } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { useTransactionsStore } from "@/stores/transactions-store";
 import { useSettingsStore } from "@/stores/settings-store";
@@ -16,6 +16,7 @@ import { buildCoinId } from "@/lib/balances/defillama";
 import { useHistoricalPrices } from "@/hooks/use-historical-prices";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -25,7 +26,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const DUST_THRESHOLD = 0.000001;
+// Drop negative / float-noise balances in the engine; classify display tiers here.
+const NEG_EPSILON = 1e-9;
+// Tokens are shown by default only if priced and worth at least this much.
+// Below this (incl. dust and unpriced tokens) is hidden behind a per-chain button.
+const MIN_VISIBLE_USD = 1;
 
 function fmtAmount(n: number) {
   if (n === 0) return "0";
@@ -36,10 +41,21 @@ function fmtValue(n: number) {
   return "$" + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function fmtPrice(p: number | undefined) {
-  if (p === undefined) return "—";
+function fmtPrice(p: number | null) {
+  if (p === null) return "—";
   if (p > 0 && p < 0.01) return "$" + p.toPrecision(4);
   return "$" + p.toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+
+interface ValuedToken {
+  key: string;
+  symbol: string;
+  chainKey: string;
+  contract: string;
+  imgUrl: string | null;
+  amount: number;
+  price: number | null;
+  value: number | null;
 }
 
 function BalancesContent() {
@@ -47,7 +63,7 @@ function BalancesContent() {
   const activeAddress = useSettingsStore((s) => s.activeAddress);
 
   const [currentTime, setCurrentTime] = useState(0);
-  const [hideDust, setHideDust] = useState(true);
+  const [expandedChains, setExpandedChains] = useState<Set<string>>(new Set());
 
   // Debounced time drives the (networked) price fetch so scrubbing doesn't spam
   // DefiLlama. Amounts still update live at currentTime.
@@ -68,61 +84,66 @@ function BalancesContent() {
     setDebouncedTime(balanceDeltas.latest);
   }, [balanceDeltas]);
 
-  const dustThreshold = hideDust ? DUST_THRESHOLD : 0;
-
-  const { chains: rawChains, hiddenCount } = useMemo(() => {
+  const rawChains = useMemo(() => {
     const balances = reconstructAt(balanceDeltas, currentTime);
-    return groupByChain(balances, balanceDeltas.chainMeta, { dustThreshold });
-  }, [balanceDeltas, currentTime, dustThreshold]);
+    return groupByChain(balances, balanceDeltas.chainMeta, {
+      dustThreshold: NEG_EPSILON,
+    }).chains;
+  }, [balanceDeltas, currentTime]);
 
   // Coin ids to price, derived from the debounced snapshot so the query key is
   // stable while actively scrubbing.
   const coinIds = useMemo(() => {
     const balances = reconstructAt(balanceDeltas, debouncedTime);
-    const { chains } = groupByChain(balances, balanceDeltas.chainMeta, { dustThreshold });
+    const { chains } = groupByChain(balances, balanceDeltas.chainMeta, {
+      dustThreshold: NEG_EPSILON,
+    });
     return chains.flatMap((c) => c.tokens.map((t) => buildCoinId(t.chainKey, t.contract)));
-  }, [balanceDeltas, debouncedTime, dustThreshold]);
+  }, [balanceDeltas, debouncedTime]);
 
   const { prices, isFetching } = useHistoricalPrices(coinIds, debouncedTime);
 
-  // Value each token (live amount × price at the selected day) and roll up.
-  const { chains, grandTotal, chainTotals, pricedCount } = useMemo(() => {
-    const chainTotals = new Map<string, number>();
+  // Value each token (live amount × price at the selected day), split into the
+  // default-visible tier (priced and ≥ $1) vs hidden (dust / sub-$1 / unpriced).
+  const { chains, grandTotal, shownCount, hiddenCount } = useMemo(() => {
+    const enriched = [];
     let grandTotal = 0;
-    let pricedCount = 0;
+    let shownCount = 0;
+    let hiddenCount = 0;
 
     for (const chain of rawChains) {
-      let sum = 0;
-      for (const token of chain.tokens) {
-        const price = prices.get(buildCoinId(token.chainKey, token.contract));
-        if (typeof price === "number") {
-          sum += token.amount * price;
-          pricedCount++;
-        }
+      let total = 0;
+      const valued: ValuedToken[] = [];
+      for (const t of chain.tokens) {
+        const price = prices.get(buildCoinId(t.chainKey, t.contract)) ?? null;
+        const value = price !== null ? t.amount * price : null;
+        if (value !== null) total += value;
+        valued.push({ ...t, price, value });
       }
-      chainTotals.set(chain.chainKey, sum);
-      grandTotal += sum;
+
+      const visible = valued.filter((t) => t.value !== null && t.value >= MIN_VISIBLE_USD);
+      const hidden = valued.filter((t) => t.value === null || t.value < MIN_VISIBLE_USD);
+      visible.sort((a, b) => (b.value ?? 0) - (a.value ?? 0));
+      hidden.sort((a, b) => (b.value ?? -1) - (a.value ?? -1)); // priced dust above unpriced
+
+      grandTotal += total;
+      shownCount += visible.length;
+      hiddenCount += hidden.length;
+      enriched.push({ ...chain, total, visible, hidden });
     }
 
-    // Sort chains by value (most valuable first); tokens by value within chain.
-    const chains = [...rawChains].sort(
-      (a, b) => (chainTotals.get(b.chainKey) ?? 0) - (chainTotals.get(a.chainKey) ?? 0)
-    );
-    for (const chain of chains) {
-      chain.tokens.sort((a, b) => {
-        const va = (prices.get(buildCoinId(a.chainKey, a.contract)) ?? 0) * a.amount;
-        const vb = (prices.get(buildCoinId(b.chainKey, b.contract)) ?? 0) * b.amount;
-        return vb - va;
-      });
-    }
-
-    return { chains, grandTotal, chainTotals, pricedCount };
+    enriched.sort((a, b) => b.total - a.total);
+    return { chains: enriched, grandTotal, shownCount, hiddenCount };
   }, [rawChains, prices]);
 
-  const totalTokens = useMemo(
-    () => chains.reduce((sum, c) => sum + c.tokens.length, 0),
-    [chains]
-  );
+  const toggleChain = (chainKey: string) => {
+    setExpandedChains((prev) => {
+      const next = new Set(prev);
+      if (next.has(chainKey)) next.delete(chainKey);
+      else next.add(chainKey);
+      return next;
+    });
+  };
 
   if (transactions.length === 0) {
     return (
@@ -177,9 +198,7 @@ function BalancesContent() {
         startTime={balanceDeltas.earliest}
         endTime={balanceDeltas.latest}
         currentTime={currentTime}
-        hideDust={hideDust}
         onTimeChange={setCurrentTime}
-        onHideDustChange={setHideDust}
       />
 
       {chains.length === 0 ? (
@@ -188,85 +207,110 @@ function BalancesContent() {
         </p>
       ) : (
         <div className="flex flex-col gap-4">
-          {chains.map((chain) => (
-            <Card key={chain.chainKey}>
-              <CardContent className="p-4">
-                <div className="mb-3 flex items-center gap-2">
-                  {chain.chainImg && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={chain.chainImg}
-                      alt={chain.chainName}
-                      className="h-5 w-5 rounded-full"
-                    />
-                  )}
-                  <span className="font-medium capitalize">{chain.chainName}</span>
-                  <Badge variant="secondary" className="text-[10px]">
-                    {chain.tokens.length}{" "}
-                    {chain.tokens.length === 1 ? "token" : "tokens"}
-                  </Badge>
-                  <span className="ml-auto text-sm font-medium tabular-nums">
-                    {fmtValue(chainTotals.get(chain.chainKey) ?? 0)}
-                  </span>
-                </div>
+          {chains.map((chain) => {
+            const expanded = expandedChains.has(chain.chainKey);
+            const rows = expanded ? [...chain.visible, ...chain.hidden] : chain.visible;
+            return (
+              <Card key={chain.chainKey}>
+                <CardContent className="p-4">
+                  <div className="mb-3 flex items-center gap-2">
+                    {chain.chainImg && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={chain.chainImg}
+                        alt={chain.chainName}
+                        className="h-5 w-5 rounded-full"
+                      />
+                    )}
+                    <span className="font-medium capitalize">{chain.chainName}</span>
+                    <Badge variant="secondary" className="text-[10px]">
+                      {chain.visible.length}{" "}
+                      {chain.visible.length === 1 ? "token" : "tokens"}
+                    </Badge>
+                    <span className="ml-auto text-sm font-medium tabular-nums">
+                      {fmtValue(chain.total)}
+                    </span>
+                  </div>
 
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Token</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Price</TableHead>
-                      <TableHead className="text-right">Value</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {chain.tokens.map((token) => {
-                      const price = prices.get(buildCoinId(token.chainKey, token.contract));
-                      return (
-                        <TableRow key={token.key}>
-                          <TableCell>
-                            <div className="flex items-center gap-2">
-                              {token.imgUrl && (
-                                // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={token.imgUrl}
-                                  alt={token.symbol.toUpperCase()}
-                                  className="h-5 w-5 shrink-0 rounded-full"
-                                />
-                              )}
-                              <span className="font-medium">
-                                {token.symbol.toUpperCase()}
-                              </span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {fmtAmount(token.amount)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                            {fmtPrice(price)}
-                          </TableCell>
-                          <TableCell className="text-right font-mono text-sm">
-                            {price === undefined ? "—" : fmtValue(token.amount * price)}
-                          </TableCell>
+                  {rows.length > 0 && (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Token</TableHead>
+                          <TableHead className="text-right">Amount</TableHead>
+                          <TableHead className="text-right">Price</TableHead>
+                          <TableHead className="text-right">Value</TableHead>
                         </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          ))}
+                      </TableHeader>
+                      <TableBody>
+                        {rows.map((token) => {
+                          const isHidden = token.value === null || token.value < MIN_VISIBLE_USD;
+                          return (
+                            <TableRow
+                              key={token.key}
+                              className={isHidden ? "text-muted-foreground" : ""}
+                            >
+                              <TableCell>
+                                <div className="flex items-center gap-2">
+                                  {token.imgUrl && (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                      src={token.imgUrl}
+                                      alt={token.symbol.toUpperCase()}
+                                      className="h-5 w-5 shrink-0 rounded-full"
+                                    />
+                                  )}
+                                  <span className="font-medium">
+                                    {token.symbol.toUpperCase()}
+                                  </span>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm">
+                                {fmtAmount(token.amount)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                                {fmtPrice(token.price)}
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-sm">
+                                {token.value === null ? "—" : fmtValue(token.value)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  )}
+
+                  {chain.hidden.length > 0 && (
+                    <Button
+                      variant="ghost"
+                      size="xs"
+                      onClick={() => toggleChain(chain.chainKey)}
+                      className="mt-2 gap-1.5 text-xs text-muted-foreground"
+                    >
+                      {expanded ? (
+                        <ChevronUp className="h-3 w-3" />
+                      ) : (
+                        <ChevronDown className="h-3 w-3" />
+                      )}
+                      {expanded
+                        ? "Hide dust / unpriced"
+                        : `Show ${chain.hidden.length} dust / unpriced`}
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
       )}
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         Reconstructed from {transactions.length.toLocaleString()} transactions ·{" "}
-        {pricedCount}/{totalTokens} tokens priced via DefiLlama
-        {hiddenCount > 0 && ` · ${hiddenCount} dust/negative hidden`}. Amounts are
-        derived purely from transfer history and assume it is complete starting
-        from a zero balance — missing transactions, rebases, or un-emitted rewards
-        can cause drift. Tokens without DefiLlama price data are shown with no
-        value.
+        {shownCount} tokens shown, {hiddenCount} hidden (dust, sub-$1, or no
+        DefiLlama price). Amounts are derived purely from transfer history and
+        assume it is complete starting from a zero balance — missing
+        transactions, rebases, or un-emitted rewards can cause drift.
       </p>
     </div>
   );

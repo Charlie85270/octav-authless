@@ -183,8 +183,9 @@ export function groupByChain(
   let hiddenCount = 0;
 
   for (const token of balances.values()) {
-    // Hide dust and negative balances (negatives are reconstruction artifacts
-    // from incomplete history, not real holdings).
+    // Drop negative / float-noise balances (reconstruction artifacts from
+    // incomplete history). Dust positives are kept so the UI can reveal them
+    // per-chain; callers pass a tiny epsilon here.
     if (token.amount < dustThreshold) {
       hiddenCount++;
       continue;
