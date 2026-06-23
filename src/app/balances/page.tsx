@@ -2,8 +2,10 @@
 
 import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
-import { Wallet, ChevronDown, ChevronUp } from "lucide-react";
+import { format } from "date-fns";
+import { Wallet, ChevronDown, ChevronUp, Download } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
+import { downloadCSV } from "@/lib/csv-export";
 import { useTransactionsStore } from "@/stores/transactions-store";
 import { useSettingsStore } from "@/stores/settings-store";
 import { BalanceScrubber } from "@/components/balances/balance-scrubber";
@@ -50,12 +52,49 @@ function fmtPrice(p: number | null) {
 interface ValuedToken {
   key: string;
   symbol: string;
+  name: string;
   chainKey: string;
   contract: string;
   imgUrl: string | null;
   amount: number;
   price: number | null;
   value: number | null;
+}
+
+interface ValuedChain {
+  chainName: string;
+  visible: ValuedToken[];
+  hidden: ValuedToken[];
+}
+
+// CSV columns: symbol, name, contract, quantity, price at the time, value, chain.
+function buildBalancesCSV(chains: ValuedChain[], dateMs: number): string {
+  const esc = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+  const dateStr = format(new Date(dateMs), "yyyy-MM-dd HH:mm");
+  const lines = [
+    ["Symbol", "Name", "Contract", "Quantity", "Price (USD)", "Value (USD)", "Chain", "Date"]
+      .map(esc)
+      .join(","),
+  ];
+  for (const chain of chains) {
+    for (const t of [...chain.visible, ...chain.hidden]) {
+      lines.push(
+        [
+          t.symbol,
+          t.name,
+          t.contract || "native",
+          t.amount,
+          t.price ?? "",
+          t.value ?? "",
+          chain.chainName,
+          dateStr,
+        ]
+          .map(esc)
+          .join(",")
+      );
+    }
+  }
+  return lines.join("\n");
 }
 
 function BalancesContent() {
@@ -136,6 +175,11 @@ function BalancesContent() {
     return { chains: enriched, grandTotal, shownCount, hiddenCount };
   }, [rawChains, prices]);
 
+  const handleExport = () => {
+    const csv = buildBalancesCSV(chains, currentTime);
+    downloadCSV(csv, `balances-${format(new Date(currentTime), "yyyy-MM-dd")}.csv`);
+  };
+
   const toggleChain = (chainKey: string) => {
     setExpandedChains((prev) => {
       const next = new Set(prev);
@@ -188,9 +232,21 @@ function BalancesContent() {
               {fmtValue(grandTotal)}
             </span>
           </div>
-          {isFetching && (
-            <span className="text-xs text-muted-foreground">Pricing…</span>
-          )}
+          <div className="flex items-center gap-3">
+            {isFetching && (
+              <span className="text-xs text-muted-foreground">Pricing…</span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExport}
+              disabled={chains.length === 0}
+              className="gap-1.5"
+            >
+              <Download className="h-4 w-4" />
+              Export CSV
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
