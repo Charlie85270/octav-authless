@@ -14,6 +14,7 @@ export interface TokenBalance {
   key: string; // `${symbol}:${chainKey}`
   symbol: string;
   chainKey: string;
+  contract: string; // token contract ("" for native gas tokens) — used for pricing
   imgUrl: string | null;
   amount: number;
 }
@@ -30,6 +31,7 @@ interface Delta {
   key: string;
   symbol: string;
   chainKey: string;
+  contract: string;
   imgUrl: string | null;
   delta: number;
 }
@@ -85,6 +87,7 @@ export function buildDeltas(
           key: tokenKey(symbol, chainKey),
           symbol,
           chainKey,
+          contract: asset.contract || "",
           imgUrl: asset.imgSmall || null,
           delta: amount,
         });
@@ -103,6 +106,7 @@ export function buildDeltas(
           key: tokenKey(symbol, chainKey),
           symbol,
           chainKey,
+          contract: asset.contract || "",
           imgUrl: asset.imgSmall || null,
           delta: -amount,
         });
@@ -122,6 +126,7 @@ export function buildDeltas(
           key: tokenKey(nativeSymbol, txChainKey),
           symbol: nativeSymbol,
           chainKey: txChainKey,
+          contract: "", // native gas token
           imgUrl: null,
           delta: -fees,
         });
@@ -152,11 +157,13 @@ export function reconstructAt(
     if (existing) {
       existing.amount += d.delta;
       if (!existing.imgUrl && d.imgUrl) existing.imgUrl = d.imgUrl;
+      if (!existing.contract && d.contract) existing.contract = d.contract;
     } else {
       balances.set(d.key, {
         key: d.key,
         symbol: d.symbol,
         chainKey: d.chainKey,
+        contract: d.contract,
         imgUrl: d.imgUrl,
         amount: d.delta,
       });
@@ -176,7 +183,9 @@ export function groupByChain(
   let hiddenCount = 0;
 
   for (const token of balances.values()) {
-    if (Math.abs(token.amount) < dustThreshold) {
+    // Hide dust and negative balances (negatives are reconstruction artifacts
+    // from incomplete history, not real holdings).
+    if (token.amount < dustThreshold) {
       hiddenCount++;
       continue;
     }

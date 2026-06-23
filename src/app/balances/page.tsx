@@ -12,6 +12,8 @@ import {
   reconstructAt,
   groupByChain,
 } from "@/lib/balances/reconstruct";
+import { buildCoinId } from "@/lib/balances/defillama";
+import { useHistoricalPrices } from "@/hooks/use-historical-prices";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -30,12 +32,30 @@ function fmtAmount(n: number) {
   return n.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
 
+function fmtValue(n: number) {
+  return "$" + n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtPrice(p: number | undefined) {
+  if (p === undefined) return "—";
+  if (p > 0 && p < 0.01) return "$" + p.toPrecision(4);
+  return "$" + p.toLocaleString(undefined, { maximumFractionDigits: 4 });
+}
+
 function BalancesContent() {
   const transactions = useTransactionsStore((s) => s.transactions);
   const activeAddress = useSettingsStore((s) => s.activeAddress);
 
   const [currentTime, setCurrentTime] = useState(0);
   const [hideDust, setHideDust] = useState(true);
+
+  // Debounced time drives the (networked) price fetch so scrubbing doesn't spam
+  // DefiLlama. Amounts still update live at currentTime.
+  const [debouncedTime, setDebouncedTime] = useState(0);
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedTime(currentTime), 350);
+    return () => clearTimeout(id);
+  }, [currentTime]);
 
   const balanceDeltas = useMemo(
     () => buildDeltas(transactions, activeAddress),
@@ -45,14 +65,59 @@ function BalancesContent() {
   // Default the scrubber to "now" (latest tx) whenever the data changes.
   useEffect(() => {
     setCurrentTime(balanceDeltas.latest);
+    setDebouncedTime(balanceDeltas.latest);
   }, [balanceDeltas]);
 
-  const { chains, hiddenCount } = useMemo(() => {
+  const dustThreshold = hideDust ? DUST_THRESHOLD : 0;
+
+  const { chains: rawChains, hiddenCount } = useMemo(() => {
     const balances = reconstructAt(balanceDeltas, currentTime);
-    return groupByChain(balances, balanceDeltas.chainMeta, {
-      dustThreshold: hideDust ? DUST_THRESHOLD : 0,
-    });
-  }, [balanceDeltas, currentTime, hideDust]);
+    return groupByChain(balances, balanceDeltas.chainMeta, { dustThreshold });
+  }, [balanceDeltas, currentTime, dustThreshold]);
+
+  // Coin ids to price, derived from the debounced snapshot so the query key is
+  // stable while actively scrubbing.
+  const coinIds = useMemo(() => {
+    const balances = reconstructAt(balanceDeltas, debouncedTime);
+    const { chains } = groupByChain(balances, balanceDeltas.chainMeta, { dustThreshold });
+    return chains.flatMap((c) => c.tokens.map((t) => buildCoinId(t.chainKey, t.contract)));
+  }, [balanceDeltas, debouncedTime, dustThreshold]);
+
+  const { prices, isFetching } = useHistoricalPrices(coinIds, debouncedTime);
+
+  // Value each token (live amount × price at the selected day) and roll up.
+  const { chains, grandTotal, chainTotals, pricedCount } = useMemo(() => {
+    const chainTotals = new Map<string, number>();
+    let grandTotal = 0;
+    let pricedCount = 0;
+
+    for (const chain of rawChains) {
+      let sum = 0;
+      for (const token of chain.tokens) {
+        const price = prices.get(buildCoinId(token.chainKey, token.contract));
+        if (typeof price === "number") {
+          sum += token.amount * price;
+          pricedCount++;
+        }
+      }
+      chainTotals.set(chain.chainKey, sum);
+      grandTotal += sum;
+    }
+
+    // Sort chains by value (most valuable first); tokens by value within chain.
+    const chains = [...rawChains].sort(
+      (a, b) => (chainTotals.get(b.chainKey) ?? 0) - (chainTotals.get(a.chainKey) ?? 0)
+    );
+    for (const chain of chains) {
+      chain.tokens.sort((a, b) => {
+        const va = (prices.get(buildCoinId(a.chainKey, a.contract)) ?? 0) * a.amount;
+        const vb = (prices.get(buildCoinId(b.chainKey, b.contract)) ?? 0) * b.amount;
+        return vb - va;
+      });
+    }
+
+    return { chains, grandTotal, chainTotals, pricedCount };
+  }, [rawChains, prices]);
 
   const totalTokens = useMemo(
     () => chains.reduce((sum, c) => sum + c.tokens.length, 0),
@@ -88,9 +153,25 @@ function BalancesContent() {
       <div>
         <h1 className="text-xl font-semibold text-foreground">Balances</h1>
         <p className="text-sm text-muted-foreground">
-          Token holdings per chain, reconstructed from transaction history.
+          Token holdings and value per chain, reconstructed from transaction
+          history and priced at the selected date.
         </p>
       </div>
+
+      {/* Total wallet value */}
+      <Card>
+        <CardContent className="flex items-baseline justify-between p-4">
+          <div className="flex flex-col">
+            <span className="text-xs text-muted-foreground">Total wallet value</span>
+            <span className="text-3xl font-semibold tabular-nums text-foreground">
+              {fmtValue(grandTotal)}
+            </span>
+          </div>
+          {isFetching && (
+            <span className="text-xs text-muted-foreground">Pricing…</span>
+          )}
+        </CardContent>
+      </Card>
 
       <BalanceScrubber
         startTime={balanceDeltas.earliest}
@@ -124,6 +205,9 @@ function BalancesContent() {
                     {chain.tokens.length}{" "}
                     {chain.tokens.length === 1 ? "token" : "tokens"}
                   </Badge>
+                  <span className="ml-auto text-sm font-medium tabular-nums">
+                    {fmtValue(chainTotals.get(chain.chainKey) ?? 0)}
+                  </span>
                 </div>
 
                 <Table>
@@ -131,35 +215,42 @@ function BalancesContent() {
                     <TableRow>
                       <TableHead>Token</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="text-right">Value</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {chain.tokens.map((token) => (
-                      <TableRow key={token.key}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {token.imgUrl && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={token.imgUrl}
-                                alt={token.symbol.toUpperCase()}
-                                className="h-5 w-5 shrink-0 rounded-full"
-                              />
-                            )}
-                            <span className="font-medium">
-                              {token.symbol.toUpperCase()}
-                            </span>
-                          </div>
-                        </TableCell>
-                        <TableCell
-                          className={`text-right font-mono text-sm ${
-                            token.amount < 0 ? "text-destructive" : ""
-                          }`}
-                        >
-                          {fmtAmount(token.amount)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {chain.tokens.map((token) => {
+                      const price = prices.get(buildCoinId(token.chainKey, token.contract));
+                      return (
+                        <TableRow key={token.key}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {token.imgUrl && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={token.imgUrl}
+                                  alt={token.symbol.toUpperCase()}
+                                  className="h-5 w-5 shrink-0 rounded-full"
+                                />
+                              )}
+                              <span className="font-medium">
+                                {token.symbol.toUpperCase()}
+                              </span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            {fmtAmount(token.amount)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                            {fmtPrice(price)}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-sm">
+                            {price === undefined ? "—" : fmtValue(token.amount * price)}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </CardContent>
@@ -170,12 +261,12 @@ function BalancesContent() {
 
       <p className="text-[11px] leading-relaxed text-muted-foreground">
         Reconstructed from {transactions.length.toLocaleString()} transactions ·{" "}
-        {totalTokens} tokens across {chains.length} chains
-        {hiddenCount > 0 && ` · ${hiddenCount} dust hidden`}. Amounts are derived
-        purely from transfer history and assume it is complete starting from a
-        zero balance — tokens held before the first loaded transaction, missing
-        transactions, rebases, or un-emitted rewards can cause drift (including
-        negative balances).
+        {pricedCount}/{totalTokens} tokens priced via DefiLlama
+        {hiddenCount > 0 && ` · ${hiddenCount} dust/negative hidden`}. Amounts are
+        derived purely from transfer history and assume it is complete starting
+        from a zero balance — missing transactions, rebases, or un-emitted rewards
+        can cause drift. Tokens without DefiLlama price data are shown with no
+        value.
       </p>
     </div>
   );
