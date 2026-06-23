@@ -8,6 +8,7 @@ import {
   Settings,
   HelpCircle,
   Network,
+  Wallet,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,6 +32,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/transactions", label: "Transactions", icon: ArrowLeftRight },
   { href: "/explorer", label: "Explorer", icon: Network },
+  { href: "/balances", label: "Balances", icon: Wallet },
   { href: "/how-it-works", label: "How it works", icon: HelpCircle },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
