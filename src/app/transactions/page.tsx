@@ -18,6 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { useAllTransactions, useStatus } from "@/hooks/use-octav";
 import { useRequireSetup } from "@/hooks/use-require-setup";
+import { parseTimestamp } from "@/lib/utils";
 import { useSettingsStore } from "@/stores/settings-store";
 import { SyncingBanner } from "@/components/syncing-banner";
 import { Info, Coins, AlertTriangle, Loader2 } from "lucide-react";
@@ -56,11 +57,14 @@ export default function TransactionsPage() {
       result = result.filter((tx) => tx.type === type);
     }
     if (startDate) {
-      result = result.filter((tx) => tx.timestamp >= startDate);
+      // Local start-of-day for the selected date
+      const startMs = new Date(startDate + "T00:00:00").getTime();
+      result = result.filter((tx) => parseTimestamp(tx.timestamp).getTime() >= startMs);
     }
     if (endDate) {
-      // Include the full end date day
-      result = result.filter((tx) => tx.timestamp <= endDate + "T23:59:59");
+      // Local end-of-day (inclusive) for the selected date
+      const endMs = new Date(endDate + "T23:59:59.999").getTime();
+      result = result.filter((tx) => parseTimestamp(tx.timestamp).getTime() <= endMs);
     }
     return result;
   }, [allTransactions, chain, type, startDate, endDate]);
